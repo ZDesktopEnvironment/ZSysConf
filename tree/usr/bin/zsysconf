@@ -1,0 +1,80 @@
+#!/usr/bin/python3
+import datetime
+from pathlib import Path
+import distro
+import subprocess
+import sys
+import os
+import json
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QLabel, QHBoxLayout, QTabWidget, QMessageBox, QFileDialog, QColorDialog, QComboBox, QLineEdit, QListWidget, QBoxLayout
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("ZSysConf")
+
+        self.welcome_tab_label = QLabel("Welcome to ZSysConf. Press any tab you like to configure.")
+        self.welcome_tab_label.setWordWrap(1)
+
+        self.welcome_tab_layout = QVBoxLayout()
+        self.welcome_tab_layout.addWidget(self.welcome_tab_label)
+        self.welcome_tab_layout.addStretch(1)
+
+        self.welcome_tab = QWidget()
+        self.welcome_tab.setLayout(self.welcome_tab_layout)
+
+        self.about_tab_label = QLabel("Running on " + distro.name() + " " + distro.version() + "\n\nZDE is Wayland-based remix of deprecated EblanDE, that aims to look fresh and beautiful\n\nZSysConf is utility that aims to configure entire system (especially PizdOS) in ZConfig style.")
+        self.about_tab_label.setWordWrap(1)
+
+        self.about_tab_layout = QVBoxLayout()
+        self.about_tab_layout.addWidget(self.about_tab_label)
+        self.about_tab_layout.addStretch(1)
+
+        self.about_tab = QWidget()
+        self.about_tab.setLayout(self.about_tab_layout)
+
+        self.timezone_tab_timezones = QComboBox()
+        self.notintimezones = ["SECURITY", "tzdata.zi", "leap-seconds.list", "leapseconds"]
+        for i in Path("/usr/share/zoneinfo").rglob("*"):
+            if i.is_file() and not str(i).endswith(".tab") and not str(i.relative_to(Path("/usr/share/zoneinfo"))) in self.notintimezones:
+                self.timezone_tab_timezones.addItem(str(i.relative_to(Path("/usr/share/zoneinfo"))))
+        self.timezone_tab_timezones.setCurrentText(str(Path("/etc/localtime").resolve().relative_to("/usr/share/zoneinfo")).strip())
+
+        self.timezone_tab_apply = QPushButton("Apply")
+        self.timezone_tab_apply.clicked.connect(self.timezone_apply)
+        
+        self.timezone_tab_layout = QVBoxLayout()
+        self.timezone_tab_layout.addWidget(self.timezone_tab_timezones)
+        self.timezone_tab_layout.addWidget(self.timezone_tab_apply)
+        self.timezone_tab_layout.addStretch(1)
+
+        self.timezone_tab = QWidget()
+        self.timezone_tab.setLayout(self.timezone_tab_layout)
+        
+        self.tab_container = QTabWidget()
+        self.tab_container.addTab(self.welcome_tab, "Welcome") # ДОЛЖЕН БЫТЬПЕРВЫМ!!!!!!!
+        self.tab_container.addTab(self.timezone_tab, "Timezone")
+        self.tab_container.addTab(self.about_tab, "About") # ДОЛЭЕН БЫТЬ ПОСЛЕДНИМ!!!!!!!
+
+        self.setCentralWidget(self.tab_container)
+    def timezone_apply(self):
+        print("APPLYING TIMEZONE SETTINGS!")
+        print("Timezone: " + self.timezone_tab_timezones.currentText())
+        print("===")
+        print("Removing old timezone settings...")
+        os.remove("/etc/localtime")
+        print("Symlinking new timezone settings...")
+        os.symlink("/usr/share/zoneinfo/" + self.timezone_tab_timezones.currentText(), "/etc/localtime")
+        print("Applying...")
+        subprocess.run(["hwclock", "--systohc"])
+        QMessageBox.information(self, "OK", "Successful!")
+
+if os.geteuid() == 0:
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    app.exec()
+else:
+    print("You must be superuser.")
