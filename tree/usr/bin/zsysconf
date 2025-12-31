@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import socket
 import locale
 import datetime
 from pathlib import Path
@@ -71,16 +72,30 @@ class MainWindow(QMainWindow):
 
         self.locale_tab = QWidget()
         self.locale_tab.setLayout(self.locale_tab_layout)
+
+        self.hostname_tab_line = QLineEdit()
+        self.hostname_tab_line.setText(socket.gethostname())
+
+        self.hostname_tab_apply = QPushButton("Apply")
+        self.hostname_tab_apply.clicked.connect(self.hostname_apply)
+
+        self.hostname_tab_layout = QVBoxLayout()
+        self.hostname_tab_layout.addWidget(self.hostname_tab_line)
+        self.hostname_tab_layout.addWidget(self.hostname_tab_apply)
+        self.hostname_tab_layout.addStretch(1)
+
+        self.hostname_tab = QWidget()
+        self.hostname_tab.setLayout(self.hostname_tab_layout)
         
         self.tab_container = QTabWidget()
         self.tab_container.addTab(self.welcome_tab, "Welcome") # ДОЛЖЕН БЫТЬПЕРВЫМ!!!!!!!
         self.tab_container.addTab(self.timezone_tab, "Timezone")
         self.tab_container.addTab(self.locale_tab, "Locale")
+        self.tab_container.addTab(self.hostname_tab, "Hostname")
         self.tab_container.addTab(self.about_tab, "About") # ДОЛЭЕН БЫТЬ ПОСЛЕДНИМ!!!!!!!
 
         self.setCentralWidget(self.tab_container)
     def timezone_apply(self):
-        self.timezone_tab_apply.setText("APPLYING! Estimated time: less than 1 second")
         print("APPLYING TIMEZONE SETTINGS!")
         print("Timezone: " + self.timezone_tab_timezones.currentText())
         print("===")
@@ -91,9 +106,7 @@ class MainWindow(QMainWindow):
         print("Applying...")
         subprocess.run(["hwclock", "--systohc"])
         QMessageBox.information(self, "OK", "Successful!")
-        self.timezone_tab_apply.setText("Apply")
     def locale_apply(self):
-        self.locale_tab_apply.setText("APPLYING! Estimated time: 1-10 seconds")
         print("APPLYING LOCALE SETTINGS!")
         print("Locale: " + self.locale_tab_locales.currentText())
         print("===")
@@ -108,7 +121,13 @@ class MainWindow(QMainWindow):
         localeconf_file.write(str("LANG=" + self.locale_tab_locales.currentText() + ".UTF-8\nLC_ALL=" + self.locale_tab_locales.currentText() + ".UTF-8").strip())
         localeconf_file.close()
         QMessageBox.information(self, "OK", "Successful!")
-        self.locale_tab_apply.setText("Apply")
+    def hostname_apply(self):
+        print("APPLYING HOSTNAME SETTINGS!")
+        print("Hostname: " + self.hostname_tab_line.text())
+        print("===")
+        print("Setting hostname...")
+        subprocess.run(["hostnamectl", "set-hostname", self.hostname_tab_line.text()])
+        QMessageBox.information(self, "OK", "Successful!")
 
 if os.geteuid() == 0:
     app = QApplication(sys.argv)
