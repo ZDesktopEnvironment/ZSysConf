@@ -7,9 +7,22 @@ import distro
 import subprocess
 import sys
 import os
-import json
+import pwd
+import grp
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QLabel, QHBoxLayout, QTabWidget, QMessageBox, QFileDialog, QColorDialog, QComboBox, QLineEdit, QListWidget, QBoxLayout
+
+from QTermWidget import QTermWidget
+
+class PasswdTerm(QTermWidget):
+    def __init__(self, user, parent=None):
+        super().__init__(0, parent)
+        self.finished.connect(self.close)
+        self.setShellProgram("passwd")
+        self.setArgs([user])
+        self.startShellProgram()
+        self.show()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -86,12 +99,72 @@ class MainWindow(QMainWindow):
 
         self.hostname_tab = QWidget()
         self.hostname_tab.setLayout(self.hostname_tab_layout)
+
+        self.accounts_tab_userlist = QTabWidget()
+        for i in [u.pw_name for u in pwd.getpwall() if 1000 <= u.pw_uid < 65534]:
+            print(i)
+            # ПЕРЕДОЗНЫЙ ГОВНОКОД НА ВКЛАДКИ
+            tab_usertype = QComboBox()
+            tab_usertype.addItems(["User", "Admin"])
+            if i in grp.getgrnam("wheel").gr_mem:
+                tab_usertype.setCurrentText("Admin")
+            else:
+                tab_usertype.setCurrentText("User")
+            tab_usertype.setObjectName("usertype")
+
+            tab_setpassbtn = QPushButton("Set password")
+            tab_setpassbtn.clicked.connect(lambda checked, u=i: self.apply_user_pass(u))
+
+            tab_applybtn = QPushButton("Apply")
+            tab_applybtn.clicked.connect(lambda checked, u=i: self.apply_user(u))
+
+            tab_delbtn = QPushButton("Delete")
+            tab_delbtn.clicked.connect(lambda checked, u=i: self.delete_user(u))
+
+            tab_layout = QVBoxLayout()
+            tab_layout.addWidget(tab_usertype)
+            tab_layout.addWidget(tab_setpassbtn)
+            tab_layout.addWidget(tab_applybtn)
+            tab_layout.addWidget(tab_delbtn)
+            tab_layout.addStretch(1)
+
+            tab = QWidget()
+            tab.setLayout(tab_layout)
+
+            self.accounts_tab_userlist.addTab(tab, i)
+            # END ПЕРЕДОЗНЫЙ ГОВНОКОД НА ВКЛАДКИ
+
+        self.accounts_tab_userlist_newuser_username = QLineEdit()
+
+        self.accounts_tab_userlist_newuser_rightscb = QComboBox()
+        self.accounts_tab_userlist_newuser_rightscb.addItems(["User", "Admin"])
+
+        self.accounts_tab_userlist_newuser_createbtn = QPushButton("Create")
+        self.accounts_tab_userlist_newuser_createbtn.clicked.connect(self.create_user)
+
+        self.accounts_tab_userlist_newuser_layout = QVBoxLayout()
+        self.accounts_tab_userlist_newuser_layout.addWidget(self.accounts_tab_userlist_newuser_username)
+        self.accounts_tab_userlist_newuser_layout.addWidget(self.accounts_tab_userlist_newuser_rightscb)
+        self.accounts_tab_userlist_newuser_layout.addWidget(self.accounts_tab_userlist_newuser_createbtn)
+        self.accounts_tab_userlist_newuser_layout.addStretch(1)
+
+        self.accounts_tab_userlist_newuser = QWidget()
+        self.accounts_tab_userlist_newuser.setLayout(self.accounts_tab_userlist_newuser_layout)
+
+        self.accounts_tab_userlist.addTab(self.accounts_tab_userlist_newuser, "+")
+        
+        self.accounts_tab_layout = QVBoxLayout()
+        self.accounts_tab_layout.addWidget(self.accounts_tab_userlist)
+
+        self.accounts_tab = QWidget()
+        self.accounts_tab.setLayout(self.accounts_tab_layout)
         
         self.tab_container = QTabWidget()
         self.tab_container.addTab(self.welcome_tab, "Welcome") # ДОЛЖЕН БЫТЬПЕРВЫМ!!!!!!!
         self.tab_container.addTab(self.timezone_tab, "Timezone")
         self.tab_container.addTab(self.locale_tab, "Locale")
         self.tab_container.addTab(self.hostname_tab, "Hostname")
+        self.tab_container.addTab(self.accounts_tab, "Accounts")
         self.tab_container.addTab(self.about_tab, "About") # ДОЛЭЕН БЫТЬ ПОСЛЕДНИМ!!!!!!!
 
         self.setCentralWidget(self.tab_container)
@@ -127,6 +200,43 @@ class MainWindow(QMainWindow):
         print("===")
         print("Setting hostname...")
         subprocess.run(["hostnamectl", "set-hostname", self.hostname_tab_line.text()])
+        QMessageBox.information(self, "OK", "Successful!")
+    def apply_user_pass(self, user):
+        print("APPLYING USER PASSWORD SETTINGS!")
+        print("User: " + user)
+        print("===")
+        print("Creating password dialog...")
+        self.dlg = PasswdTerm(user)
+        self.dlg.show()
+    def apply_user(self, user):
+        print("APPLYING USER SETTINGS!")
+        current_tab = self.accounts_tab_userlist.currentWidget()
+        utype = current_tab.findChild(QComboBox, "usertype").currentText()
+        print("New rights: " + utype)
+        print("===")
+        if utype == "Admin":
+            subprocess.run(["usermod", "-aG", "wheel", user])
+        else:
+            subprocess.run(["usermod", "-rG", "wheel", user])
+        QMessageBox.information(self, "OK", "Successful!")
+    def create_user(self):
+        print("CREATING USER!")
+        print("Name: " + self.accounts_tab_userlist_newuser_username.text())
+        print("Rights: " + self.accounts_tab_userlist_newuser_rightscb.currentText())
+        print("===")
+        print("Creating user...")
+        subprocess.run(["useradd", "-m", self.accounts_tab_userlist_newuser_username.text()])
+        if self.accounts_tab_userlist_newuser_rightscb.currentText() == "Admin":
+            print("Giving admin rights...")
+            subprocess.run(["usermod", "-aG", "wheel", self.accounts_tab_userlist_newuser_username.text()])
+        print("Asking user password...")
+        self.apply_user_pass(self.accounts_tab_userlist_newuser_username.text())
+    def delete_user(self, user):
+        print("REMOVING USER!")
+        print("User: " + user)
+        print("===")
+        print("Deleting user...")
+        subprocess.run(["userdel", user])
         QMessageBox.information(self, "OK", "Successful!")
 
 if os.geteuid() == 0:
